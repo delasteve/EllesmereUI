@@ -196,7 +196,7 @@ local function BuildNameplatePreview(parent, parentW)
             pvAbs.absorb:SetMinMaxValues(0, 1)
             pvAbs.absorb:SetValue(shield)
             pvAbs.absorb:Show()
-            if mode == "overlay" then
+            if pvAbs._absFwOn then
                 pvAbs.absorbForward:SetMinMaxValues(0, 1)
                 pvAbs.absorbForward:SetValue(shield)
                 pvAbs.absorbForward:Show()

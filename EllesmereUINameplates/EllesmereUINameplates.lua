@@ -1917,13 +1917,19 @@ end
 --   _absMissClip: health fill edge -> bar's right end (the empty health).
 --   _absCurClip:  bar's left end -> health fill edge (the filled health), or
 --                 the whole bar in the edge placements.
---   absorbForward: in the missing clip, fills right from the health edge, so
---                  it shows min(absorb, missing). Overlay placement only.
+--   absorbForward: in the missing clip, overlay placements only:
+--     overlay        = fills right from the health edge, so it shows
+--                      min(absorb, missing)
+--     overlayReverse = fills right from the bar's left end, so it shows only
+--                      what exceeds current health, past the health edge
 --   absorb: in the filled clip, placed per absorbEdgeMode:
 --     overlay        = fills left from the bar's right end; the clip shows
 --                      only what exceeds empty health, over the health fill
---     overlayReverse = the whole shield fills left from the health edge
+--     overlayReverse = fills left from the health edge, over current health
 --     right / left   = the whole shield from that end of the bar
+-- Overlay Reverse thus draws the shield back over health, and a shield
+-- larger than current health spans from the bar's left end instead of
+-- losing its excess.
 -- Shared with the options preview (owner is any table holding the bars).
 function ns.NP_BuildAbsorbBars(owner, health, mask)
     local lvl = health:GetFrameLevel() + 1
@@ -1956,12 +1962,21 @@ function ns.NP_LayoutAbsorbBars(owner, health, mode)
     local fillTex = health:GetStatusBarTexture()
     local curClip, missClip = owner._absCurClip, owner._absMissClip
     local ab, fw = owner.absorb, owner.absorbForward
+    local fromLeft = mode == "overlayReverse"
     missClip:ClearAllPoints()
-    missClip:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", -1, 0)
+    -- 1px into the fill seals the seam behind a forward bar that starts at
+    -- the health edge; one from the bar's left end would double that pixel
+    -- over the main bar.
+    missClip:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", fromLeft and 0 or -1, 0)
     missClip:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
     fw:ClearAllPoints()
-    fw:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", 0, 0)
-    fw:SetPoint("BOTTOMLEFT", fillTex, "BOTTOMRIGHT", 0, 0)
+    if fromLeft then
+        fw:SetPoint("TOPLEFT", health, "TOPLEFT", 0, 0)
+        fw:SetPoint("BOTTOMLEFT", health, "BOTTOMLEFT", 0, 0)
+    else
+        fw:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", 0, 0)
+        fw:SetPoint("BOTTOMLEFT", fillTex, "BOTTOMRIGHT", 0, 0)
+    end
     curClip:ClearAllPoints()
     ab:ClearAllPoints()
     if mode == "right" or mode == "left" then
@@ -1983,7 +1998,8 @@ function ns.NP_LayoutAbsorbBars(owner, health, mode)
         ab:SetPoint("TOPRIGHT", health, "TOPRIGHT", 0, 0)
         ab:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
     end
-    if mode ~= "overlay" then fw:Hide() end
+    owner._absFwOn = mode == "overlay" or fromLeft
+    if not owner._absFwOn then fw:Hide() end
     owner._absEdge, owner._absFill = mode, fillTex
 end
 
@@ -8687,10 +8703,11 @@ function NameplateFrame:UpdateHealthValues()
         self.absorb:SetMinMaxValues(0, maxHealth)
         self.absorb:SetValue(absorbAmt)
         self.absorb:Show()
-        -- The forward bar fills empty health in the Overlay placement only;
-        -- the others draw the whole shield through the main bar.
+        -- The forward bar draws only in the overlay placements (stamped by
+        -- the layout); the edge placements draw the whole shield through the
+        -- main bar.
         local fw = self.absorbForward
-        if self._absEdge == "overlay" then
+        if self._absFwOn then
             fw:SetMinMaxValues(0, maxHealth)
             fw:SetValue(absorbAmt)
             fw:Show()
